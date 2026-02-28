@@ -1,103 +1,127 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score
+import matplotlib.pyplot as plt
 
-# ---------------------------
-# PAGE CONFIG
-# ---------------------------
-st.set_page_config(page_title="Retail Analytics Dashboard", layout="wide")
+st.set_page_config(page_title="AI Ecommerce Dashboard", layout="wide")
 
-st.title("🛒 Retail Product Analytics & Popularity Prediction")
+st.title("🛒 AI Powered Ecommerce Sales Dashboard")
 
-# ---------------------------
-# LOAD DATA
-# ---------------------------
-@st.cache_data
-def load_data():
-    df = pd.read_csv("diversified_ecommerce_dataset.csv")
-    return df
+# Load Data
+df = pd.read_csv("sales_data.csv")
+df["Order_Date"] = pd.to_datetime(df["Order_Date"])
 
-df = load_data()
+# Create Sales Column
+df["Sales"] = df["Quantity"] * df["Unit_Price"]
 
-# ---------------------------
-# DATA CLEANING
-# ---------------------------
-df = df.dropna()
+# Sidebar Filters
+st.sidebar.header("🔎 Filter Data")
 
-# Convert percentage columns if needed
-if "Return Rate" in df.columns:
-    df["Return Rate"] = df["Return Rate"].replace('%', '', regex=True).astype(float)
+category_filter = st.sidebar.multiselect(
+    "Select Category",
+    df["Category"].unique(),
+    default=df["Category"].unique()
+)
 
-# ---------------------------
-# DASHBOARD SECTION
-# ---------------------------
-st.subheader("📊 Dataset Overview")
+region_filter = st.sidebar.multiselect(
+    "Select Region",
+    df["Region"].unique(),
+    default=df["Region"].unique()
+)
+
+product_filter = st.sidebar.multiselect(
+    "Select Product",
+    df["Product"].unique(),
+    default=df["Product"].unique()
+)
+
+filtered_df = df[
+    (df["Category"].isin(category_filter)) &
+    (df["Region"].isin(region_filter)) &
+    (df["Product"].isin(product_filter))
+]
+
+# KPI Metrics
+total_sales = filtered_df["Sales"].sum()
+total_profit = filtered_df["Profit"].sum()
+total_orders = filtered_df["Order_ID"].nunique()
+avg_profit = filtered_df["Profit"].mean()
 
 col1, col2, col3, col4 = st.columns(4)
 
-col1.metric("Total Products", len(df))
-col2.metric("Avg Price", round(df["Price"].mean(),2))
-col3.metric("Avg Discount", round(df["Discount"].mean(),2))
-col4.metric("Avg Popularity", round(df["Popularity Index"].mean(),2))
+col1.metric("💰 Total Sales", f"₹ {total_sales:,.0f}")
+col2.metric("📈 Total Profit", f"₹ {total_profit:,.0f}")
+col3.metric("🛍 Total Orders", total_orders)
+col4.metric("📊 Avg Profit", f"₹ {avg_profit:,.0f}")
 
-# ---------------------------
-# CATEGORY ANALYSIS
-# ---------------------------
-st.subheader("📦 Category Wise Popularity")
+st.markdown("---")
 
-category_pop = df.groupby("Category")["Popularity Index"].mean()
+# Sales by Category
+st.subheader("📦 Sales by Category")
+category_sales = filtered_df.groupby("Category")["Sales"].sum()
+st.bar_chart(category_sales)
 
-st.bar_chart(category_pop)
+# Sales by Region
+st.subheader("🌍 Sales by Region")
+region_sales = filtered_df.groupby("Region")["Sales"].sum()
+st.bar_chart(region_sales)
 
-# ---------------------------
-# PRICE VS POPULARITY
-# ---------------------------
-st.subheader("💰 Price vs Popularity")
+# Top 5 Products
+st.subheader("🏆 Top 5 Products by Sales")
+top_products = filtered_df.groupby("Product")["Sales"].sum().sort_values(ascending=False).head(5)
+st.bar_chart(top_products)
 
-fig, ax = plt.subplots()
-ax.scatter(df["Price"], df["Popularity Index"])
-ax.set_xlabel("Price")
-ax.set_ylabel("Popularity Index")
-st.pyplot(fig)
+# Monthly Trend
+st.subheader("📅 Monthly Sales Trend")
+filtered_df["Month"] = filtered_df["Order_Date"].dt.to_period("M")
+monthly_sales = filtered_df.groupby("Month")["Sales"].sum()
+st.line_chart(monthly_sales)
 
-# ---------------------------
-# ML MODEL SECTION
-# ---------------------------
-st.subheader("🤖 Popularity Prediction (ML Model)")
+st.markdown("---")
 
-# Select numeric features
-features = ["Price", "Discount", "Stock Level", "Shipping Cost", "Return Rate"]
+# 🤖 ML Sales Prediction Section
+st.subheader("🤖 AI Future Sales Prediction")
 
-X = df[features]
-y = df["Popularity Index"]
+product_selected = st.selectbox("Select Product for Prediction", df["Product"].unique())
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+product_df = df[df["Product"] == product_selected]
 
-model = LinearRegression()
-model.fit(X_train, y_train)
+product_df = product_df.sort_values("Order_Date")
+product_df["Month_Num"] = np.arange(len(product_df))
 
-y_pred = model.predict(X_test)
+if len(product_df) > 1:
+    X = product_df[["Month_Num"]]
+    y = product_df["Sales"]
 
-r2 = r2_score(y_test, y_pred)
+    model = LinearRegression()
+    model.fit(X, y)
 
-st.write("Model Accuracy (R² Score):", round(r2,2))
+    next_month = np.array([[len(product_df)]])
+    predicted_sales = model.predict(next_month)[0]
 
-# ---------------------------
-# USER INPUT FOR PREDICTION
-# ---------------------------
-st.subheader("🔮 Predict Product Popularity")
+    st.success(f"📈 Predicted Next Month Sales for {product_selected}: ₹ {predicted_sales:,.0f}")
 
-price = st.number_input("Enter Price", min_value=0.0)
-discount = st.number_input("Enter Discount", min_value=0.0)
-stock = st.number_input("Enter Stock Level", min_value=0.0)
-shipping = st.number_input("Enter Shipping Cost", min_value=0.0)
-return_rate = st.number_input("Enter Return Rate", min_value=0.0)
+    # Plot Prediction
+    fig, ax = plt.subplots()
+    ax.plot(product_df["Month_Num"], y)
+    ax.scatter(len(product_df), predicted_sales)
+    ax.set_title("Sales Prediction Trend")
+    st.pyplot(fig)
 
-if st.button("Predict Popularity"):
-    input_data = np.array([[price, discount, stock, shipping, return_rate]])
-    prediction = model.predict(input_data)
-    st.success(f"Predicted Popularity Index: {round(prediction[0],2)}")
+else:
+    st.warning("Not enough data for prediction.")
+
+st.markdown("---")
+
+# Show Data
+st.subheader("📋 Filtered Data")
+st.dataframe(filtered_df)
+
+# Download Button
+st.download_button(
+    label="📥 Download Filtered Data",
+    data=filtered_df.to_csv(index=False),
+    file_name="filtered_sales_data.csv",
+    mime="text/csv"
+)
