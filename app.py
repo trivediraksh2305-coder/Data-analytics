@@ -9,7 +9,7 @@ st.set_page_config(page_title="AI Ecommerce Dashboard", layout="wide")
 st.title("🛒 AI Powered Ecommerce Sales Dashboard")
 
 # Load Data
-df = pd.read_csv("sales_data.csv")
+df = pd.read_csv("sales_data.xlsx")
 df["Order_Date"] = pd.to_datetime(df["Order_Date"])
 
 # Create Sales Column
