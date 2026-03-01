@@ -24,7 +24,7 @@ st.markdown("""
 # ------------------------
 # Load Data
 # ------------------------
-df = pd.read_csv("sales_data.csv")
+df = pd.read_excel("sales_data.xlsx")
 df["Order_Date"] = pd.to_datetime(df["Order_Date"])
 df["Sales"] = df["Quantity"] * df["Unit_Price"]
 df["Month"] = df["Order_Date"].dt.to_period("M").astype(str)
